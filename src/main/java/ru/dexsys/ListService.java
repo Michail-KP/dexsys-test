@@ -1,89 +1,103 @@
 package ru.dexsys;
 
 import java.util.*;
+import java.util.function.BooleanSupplier;
+import java.util.stream.Collectors;
 
 public class ListService {
-    private static final ArrayList<Double> x = new ArrayList<>();
-    private static final ArrayList<Double> s = new ArrayList<>();
-    private static final ArrayList<Double> m = new ArrayList<>();
-    private static final ArrayList<Double> others = new ArrayList<>();
+    private enum ListType {
+        X {
+            public BooleanSupplier getCondition(double number) {
+                return () -> number % 3 == 0;
+            }
+        },
+        S {
+            public BooleanSupplier getCondition(double number) {
+                return () -> number % 7 == 0;
+            }
+        },
+        M {
+            public BooleanSupplier getCondition(double number) {
+                return () -> number % 21 == 0;
+            }
+        },
+        OTHERS {
+            public BooleanSupplier getCondition(double number) {
+                return () -> !(number % 3 == 0) && !(number % 7 == 0) && !(number % 21 == 0);
+            }
+        };
+
+        public abstract BooleanSupplier getCondition(double number);
+    }
+
+    private static final HashMap<ListType, List<Double>> lists = new HashMap<>();
 
     public static void init(double[] numbers) {
-        for (Double number : numbers) {
-            if ((number % 3) == 0) {
-                x.add(number);
-            }
-
-            if ((number % 7) == 0) {
-                s.add(number);
-            }
-
-            if ((number % 21) == 0) {
-                m.add(number);
-            }
-
-            if (!x.contains(number) && !s.contains(number) && !m.contains(number)) {
-                others.add(number);
-            }
-        }
-
-        x.sort(Comparator.naturalOrder());
-        s.sort(Comparator.naturalOrder());
-        m.sort(Comparator.naturalOrder());
-        others.sort(Comparator.naturalOrder());
+        var formattedNumbers = Arrays.stream(numbers).boxed().distinct().collect(Collectors.toList());
+        Arrays.stream(ListType.values()).forEach(type -> {
+            lists.putAll(formattedNumbers.stream()
+                    .filter(dbl -> type.getCondition(dbl).getAsBoolean())
+                    .sorted()
+                    .collect(Collectors.groupingBy(g -> type)));
+        });
     }
 
     public static String print() {
-        return "All lists are below:\n" +
-                "X list" + ((x.isEmpty()) ? " is empty" : ": " + x.toString()) + "\n" +
-                "S list" + ((s.isEmpty()) ? " is empty" : ": " + s.toString()) + "\n" +
-                "M list" + ((m.isEmpty()) ? " is empty" : ": " + m.toString());
+        return Arrays.stream(ListType.values())
+                .filter(t -> !t.equals(ListType.OTHERS))
+                .map(r -> lists.entrySet().stream()
+                        .filter(s -> s.getKey().equals(r))
+                        .findFirst()
+                        .map(g -> String.format("%s list: %s", g.getKey().toString().toUpperCase(), g.getValue()))
+                        .orElse(String.format("%s list is empty", r)))
+                .collect(Collectors.joining("\n"));
     }
 
     public static String print(String type) throws Exception {
-        return switch (type) {
-            case "X" -> "X list" + ((x.isEmpty()) ? " is empty" : ": " + x.toString());
-            case "S" -> "S list" + ((s.isEmpty()) ? " is empty" : ": " + s.toString());
-            case "M" -> "M list" + ((m.isEmpty()) ? " is empty" : ": " + m.toString());
-            default -> throw new Exception("Type " + type + " doesn't exist.");
-        };
+        try {
+            var t = ListType.valueOf(type);
+            return lists.entrySet().stream()
+                    .filter(e -> e.getKey().equals(t))
+                    .findFirst()
+                    .map(s -> String.format("%s list: %s", s.getKey().toString().toUpperCase(), s.getValue()))
+                    .orElse(String.format("%s list is empty", t.toString().toUpperCase()));
 
+        } catch (IllegalArgumentException e) {
+            throw new Exception("Type " + type + " doesn't exist.");
+        }
     }
 
     public static String printIfAnyMoreExists() {
-        if (others.isEmpty()) {
-            return "false";
-        }
-
-        return "true";
+        return lists.entrySet().stream()
+                .filter(s -> s.getKey().equals(ListType.OTHERS))
+                .findFirst().map(r -> Boolean.TRUE)
+                .orElse(Boolean.FALSE)
+                .toString();
     }
 
     public static void clear(String type) throws Exception {
-        switch (type) {
-            case "X" -> x.clear();
-            case "S" -> s.clear();
-            case "M" -> m.clear();
-            default -> throw new Exception("Type " + type + " doesn't exist.");
+        try {
+            var t = ListType.valueOf(type);
+            lists.remove(t);
+        } catch (IllegalArgumentException e) {
+            throw new Exception("Type " + type + " doesn't exist.");
         }
 
     }
 
     public static String merge() {
-        if (x.isEmpty() && s.isEmpty() && m.isEmpty()) {
+        if (lists.entrySet().stream().filter(y -> !y.getKey().equals(ListType.OTHERS)).count() < 1) {
             return "Nothing to merge.";
         }
 
-        ArrayList<Double> mergedList = new ArrayList<>();
-        mergedList.addAll(x);
-        mergedList.addAll(s);
-        mergedList.addAll(m);
+        var mergedLists = lists.entrySet().stream().filter(y -> !y.getKey().equals(ListType.OTHERS))
+                .map(Map.Entry::getValue).flatMap(Collection::stream)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
 
-        x.clear();
-        s.clear();
-        m.clear();
-        others.clear();
+        lists.clear();
 
-        mergedList.sort(Comparator.naturalOrder());
-        return mergedList.toString();
+        return mergedLists.toString();
     }
 }
